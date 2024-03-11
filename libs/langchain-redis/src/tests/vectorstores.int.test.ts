@@ -7,14 +7,17 @@ import { test, expect } from "@jest/globals";
 import { faker } from "@faker-js/faker";
 import { Document } from "@langchain/core/documents";
 import { SyntheticEmbeddings } from "@langchain/core/utils/testing";
+import { GenericContainer, StartedTestContainer } from "testcontainers";
 import { RedisVectorStore } from "../vectorstores.js";
 
 describe("RedisVectorStore", () => {
   let vectorStore: RedisVectorStore;
+  let container: StartedTestContainer;
   let client: RedisClientType;
 
   beforeAll(async () => {
-    client = createClient({ url: process.env.REDIS_URL });
+    container = await new GenericContainer("redis/redis-stack:latest").withExposedPorts(6379).start();
+    client = createClient({ url: `redis://${container.getHost()}:${container.getMappedPort(6379)}` });
     await client.connect();
 
     vectorStore = new RedisVectorStore(new SyntheticEmbeddings(), {
@@ -27,6 +30,7 @@ describe("RedisVectorStore", () => {
   afterAll(async () => {
     await vectorStore.delete({ deleteAll: true });
     await client.quit();
+    await container.stop();
   });
 
   test("auto-generated ids", async () => {

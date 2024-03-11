@@ -1,15 +1,22 @@
 /* eslint-disable no-promise-executor-return */
 
 import { test, expect } from "@jest/globals";
-import { createClient } from "redis";
+import { createClient, RedisClientType } from "redis";
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
+import { GenericContainer, StartedTestContainer } from "testcontainers";
 import { RedisChatMessageHistory } from "../chat_histories.js";
 
-afterAll(async () => {
-  const client = createClient();
+let container: StartedTestContainer;
+let client: RedisClientType;
+beforeAll(async () => {
+  container = await new GenericContainer("redis/redis-stack:latest").withExposedPorts(6379).start();
+  client = createClient({ url: `redis://${container.getHost()}:${container.getMappedPort(6379)}` });
   await client.connect();
-  await client.flushDb();
-  await client.disconnect();
+});
+
+afterAll(async () => {
+  await client.quit();
+  await container.stop();
 });
 
 /**
@@ -21,6 +28,7 @@ afterAll(async () => {
 test("Test Redis history store", async () => {
   const chatHistory = new RedisChatMessageHistory({
     sessionId: new Date().toISOString(),
+    client
   });
 
   const blankResult = await chatHistory.getMessages();
@@ -41,6 +49,7 @@ test("Test Redis history store", async () => {
 test("Test clear Redis history store", async () => {
   const chatHistory = new RedisChatMessageHistory({
     sessionId: new Date().toISOString(),
+    client
   });
 
   await chatHistory.addUserMessage("Who is the best vocalist?");
@@ -64,6 +73,7 @@ test("Test Redis history with a TTL", async () => {
   const chatHistory = new RedisChatMessageHistory({
     sessionId: new Date().toISOString(),
     sessionTTL: 5,
+    client
   });
 
   const blankResult = await chatHistory.getMessages();
